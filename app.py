@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 # PAGE CONFIG
 # ===============================
 st.set_page_config(
-    page_title="MIT College Placement Dashboard",
+    page_title="MIT College Placement Analysis",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -65,64 +65,42 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # 1️⃣ HOME PAGE
 # ===============================
 if page == "Home":
+
     st.markdown(
-        "<h1 style='text-align: center; color: #2E86C1; font-family:Sans-serif;'>MIT College Placement Dashboard</h1>", 
+        "<h4 style='text-align: center; color: #333;'>Quick Overview of Students & Placement Stats</h4>",
         unsafe_allow_html=True
     )
-    st.markdown(
-        "<p style='text-align: center; font-size:18px; color: #34495E;'>Explore, visualize, and predict student placements using interactive tools.</p>",
-        unsafe_allow_html=True
-    )
-    st.markdown("---")
 
-    # Fix placement status values if needed
-    # Ensure 'placementstatus' column is consistent
-    df['placementstatus'] = df['placementstatus'].astype(str).str.strip().str.title()
-    df['placementstatus'] = df['placementstatus'].replace({'Placed': 'Placed', 'Not Placed': 'Not Placed'})
+    df = pd.read_csv("outputs/placement_cleaned.csv")
 
-    # Key statistics
-    total_students = df.shape[0]
-    placed_count = df[df['placementstatus'] == 'Placed'].shape[0]
-    not_placed_count = df[df['placementstatus'] == 'Not Placed'].shape[0]
-    avg_cgpa = round(df['cgpa'].mean(), 2)
+    # Placement numeric mapping for overview only
+    df['placement_numeric'] = df['placementstatus'].astype(str).str.lower().apply(lambda x: 1 if 'place' in x or x=='1' or x=='yes' else 0)
 
-    col1, col2, col3, col4 = st.columns(4)
+    # High-level metrics
+    total_students = len(df)
+    placed_count = df['placement_numeric'].sum()
+    not_placed_count = total_students - placed_count
+
+    col1, col2, col3 = st.columns(3)
     col1.metric("Total Students", total_students)
-    col2.metric("Placed Students", placed_count)
-    col3.metric("Not Placed Students", not_placed_count)
-    col4.metric("Average CGPA", avg_cgpa)
+    col2.metric("Placed", placed_count)
+    col3.metric("Not Placed", not_placed_count)
 
     st.markdown("---")
 
-    # Quick interactive filters
-    st.subheader("📊 Explore Data Quickly")
-    col1, col2 = st.columns(2)
-    with col1:
-        internships_filter = st.slider(
-            "Internships Completed",
-            int(df['internships'].min()), int(df['internships'].max()),
-            (int(df['internships'].min()), int(df['internships'].max()))
-        )
-    with col2:
-        projects_filter = st.slider(
-            "Projects Completed",
-            int(df['projects'].min()), int(df['projects'].max()),
-            (int(df['projects'].min()), int(df['projects'].max()))
-        )
+    # Pie chart: Placement distribution
+    pie_data = df['placement_numeric'].value_counts().rename(index={1:'Placed', 0:'Not Placed'}).reset_index()
+    pie_data.columns = ['Placement', 'Count']
+    fig_pie = px.pie(pie_data, names='Placement', values='Count', color='Placement',
+                     color_discrete_map={'Placed':'green','Not Placed':'red'},
+                     title="Overall Placement Distribution")
+    st.plotly_chart(fig_pie, use_container_width=True)
 
-    # Filtered dataset
-    filtered_df = df[
-        (df['internships'] >= internships_filter[0]) & (df['internships'] <= internships_filter[1]) &
-        (df['projects'] >= projects_filter[0]) & (df['projects'] <= projects_filter[1])
-    ]
-
-    st.write(f"Showing first 10 rows of {filtered_df.shape[0]} students after filter:")
-    st.dataframe(filtered_df.head(10))
-
-    # Placement distribution chart
-    st.subheader("Placement Distribution")
-    placement_counts = filtered_df['placementstatus'].value_counts()
-    st.bar_chart(placement_counts)
+    # Quick Stats Box
+    st.markdown("### Quick Stats")
+    st.write(f"- Average CGPA: {df['cgpa'].mean():.2f}" if 'cgpa' in df.columns else "- Average CGPA: N/A")
+    st.write(f"- Average Internship Count: {df['internships'].mean():.1f}" if 'internships' in df.columns else "- Avg Internships: N/A")
+    st.write(f"- Average Projects Count: {df['projects'].mean():.1f}" if 'projects' in df.columns else "- Avg Projects: N/A")
 
 
 # ===============================
@@ -146,6 +124,14 @@ elif page == "EDA":
     corr = df[numeric_cols].corr()
     fig2 = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu_r', title="Feature Correlations")
     st.plotly_chart(fig2, use_container_width=True)
+
+    st.write("### Internships vs Projects")
+    if 'internships' in df.columns and 'projects' in df.columns:
+        fig_scatter = px.scatter(df, x='internships', y='projects', color='placement_numeric',
+                                 color_discrete_map={1:'green',0:'red'},
+                                 labels={'placement_numeric':'Placement'},
+                                 title='Internships vs Projects by Placement')
+    st.plotly_chart(fig_scatter, use_container_width=True
 
     # Interactive scatter: CGPA vs Aptitude Score
     st.write("### CGPA vs Aptitude Test Score by Placement")
@@ -182,7 +168,6 @@ if page == "Predict":
         "Adjust the student attributes below and click **Predict** to see the placement probability and predicted status."
     )
 
-    import joblib
 
     # Load model, scaler, and feature columns
     @st.cache_data
@@ -197,16 +182,20 @@ if page == "Predict":
 
     model, feature_cols, scaler = load_artifacts()
 
-    # Only numeric features for sliders
-    numeric_features = [f for f in feature_cols if f in X.select_dtypes(include=['int64','float64']).columns]
+    # Load cleaned dataset to extract min/max/median for numeric features
+    df_cleaned = pd.read_csv("outputs/placement_cleaned.csv")
+
+    # Determine numeric features present in both cleaned dataset and model features
+    numeric_features = [f for f in feature_cols if f in df_cleaned.select_dtypes(include=[np.number]).columns]
 
     st.write("### Adjust Student Attributes")
     user_input = {}
 
+    # Create sliders dynamically
     for feature in numeric_features:
-        min_val = float(X[feature].min())
-        max_val = float(X[feature].max())
-        median_val = float(X[feature].median())
+        min_val = float(df_cleaned[feature].min())
+        max_val = float(df_cleaned[feature].max())
+        median_val = float(df_cleaned[feature].median())
         user_input[feature] = st.slider(
             label=feature,
             min_value=min_val,
@@ -216,7 +205,7 @@ if page == "Predict":
 
     # Predict button
     if st.button("Predict Placement"):
-        # Create a row with all features
+        # Create a row with all features in the correct order
         row = pd.DataFrame(columns=feature_cols)
         row.loc[0] = 0  # default all missing features to 0
 
@@ -225,7 +214,7 @@ if page == "Predict":
             if k in row.columns:
                 row.at[0, k] = v
 
-        # Scale if scaler exists
+        # Apply scaler if exists
         if scaler:
             row_scaled = scaler.transform(row)
         else:
@@ -238,3 +227,4 @@ if page == "Predict":
         # Display results
         st.success(f"Predicted Placement Probability: {prob*100:.2f}%")
         st.info(f"Predicted Placement Status: {'Placed' if pred_label==1 else 'Not Placed'}")
+
