@@ -65,32 +65,27 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # 1️⃣ HOME PAGE
 # ===============================
 if page == "Home":
-    st.subheader("Welcome to MIT College Placement Dashboard")
-    
-    # Hero Image
-    st.image(
-        "https://images.unsplash.com/photo-1596496053374-3f04f0d0d9d0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29sbGVnZXxlbnwwfHwwfHw%3D&ixlib=rb-4.0.3&q=80&w=1080",
-        use_container_width=True
+    st.markdown(
+        "<h1 style='text-align: center; color: #2E86C1; font-family:Sans-serif;'>MIT College Placement Dashboard</h1>", 
+        unsafe_allow_html=True
     )
-
-    st.write(
-        """
-        This interactive dashboard allows you to:
-        - Explore placement data of MIT College students
-        - Visualize trends and correlations
-        - Compare machine learning models predicting placement
-        - Predict the likelihood of a student getting placed based on their attributes
-        """
+    st.markdown(
+        "<p style='text-align: center; font-size:18px; color: #34495E;'>Explore, visualize, and predict student placements using interactive tools.</p>",
+        unsafe_allow_html=True
     )
-
     st.markdown("---")
+
+    # Fix placement status values if needed
+    # Ensure 'placementstatus' column is consistent
+    df['placementstatus'] = df['placementstatus'].astype(str).str.strip().str.title()
+    df['placementstatus'] = df['placementstatus'].replace({'Placed': 'Placed', 'Not Placed': 'Not Placed'})
 
     # Key statistics
     total_students = df.shape[0]
-    placed_count = df[df['placementstatus']=='Placed'].shape[0]
-    not_placed_count = df[df['placementstatus']=='Not Placed'].shape[0]
+    placed_count = df[df['placementstatus'] == 'Placed'].shape[0]
+    not_placed_count = df[df['placementstatus'] == 'Not Placed'].shape[0]
     avg_cgpa = round(df['cgpa'].mean(), 2)
-    
+
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Students", total_students)
     col2.metric("Placed Students", placed_count)
@@ -99,19 +94,35 @@ if page == "Home":
 
     st.markdown("---")
 
-    # Quick filter options for visual exploration
-    st.write("### Quick Filters")
+    # Quick interactive filters
+    st.subheader("📊 Explore Data Quickly")
     col1, col2 = st.columns(2)
     with col1:
-        internship_filter = st.slider("Internships Completed", int(df['internships'].min()), int(df['internships'].max()), (int(df['internships'].min()), int(df['internships'].max())))
+        internships_filter = st.slider(
+            "Internships Completed",
+            int(df['internships'].min()), int(df['internships'].max()),
+            (int(df['internships'].min()), int(df['internships'].max()))
+        )
     with col2:
-        project_filter = st.slider("Projects Completed", int(df['projects'].min()), int(df['projects'].max()), (int(df['projects'].min()), int(df['projects'].max())))
+        projects_filter = st.slider(
+            "Projects Completed",
+            int(df['projects'].min()), int(df['projects'].max()),
+            (int(df['projects'].min()), int(df['projects'].max()))
+        )
 
-    filtered_df = df[(df['internships'] >= internship_filter[0]) & (df['internships'] <= internship_filter[1]) &
-                     (df['projects'] >= project_filter[0]) & (df['projects'] <= project_filter[1])]
+    # Filtered dataset
+    filtered_df = df[
+        (df['internships'] >= internships_filter[0]) & (df['internships'] <= internships_filter[1]) &
+        (df['projects'] >= projects_filter[0]) & (df['projects'] <= projects_filter[1])
+    ]
 
-    st.write(f"Filtered Dataset Preview ({filtered_df.shape[0]} students)")
-    st.dataframe(filtered_df.head())
+    st.write(f"Showing first 10 rows of {filtered_df.shape[0]} students after filter:")
+    st.dataframe(filtered_df.head(10))
+
+    # Placement distribution chart
+    st.subheader("Placement Distribution")
+    placement_counts = filtered_df['placementstatus'].value_counts()
+    st.bar_chart(placement_counts)
 
 
 # ===============================
@@ -165,32 +176,65 @@ elif page == "Model Comparison":
 # ===============================
 # 4️⃣ PREDICT PAGE
 # ===============================
-elif page == "Predict":
-    st.subheader("🎯 Predict Student Placement")
-    st.write("Enter student details below to predict placement:")
+if page == "Predict":
+    st.subheader("Predict Student Placement")
+    st.write(
+        "Adjust the student attributes below and click **Predict** to see the placement probability and predicted status."
+    )
 
+    import joblib
+
+    # Load model, scaler, and feature columns
+    @st.cache_data
+    def load_artifacts():
+        model = joblib.load("outputs/placement_prediction_model.pkl")
+        feature_cols = joblib.load("outputs/feature_columns.pkl")
+        try:
+            scaler = joblib.load("outputs/scaler.pkl")
+        except:
+            scaler = None
+        return model, feature_cols, scaler
+
+    model, feature_cols, scaler = load_artifacts()
+
+    # Only numeric features for sliders
+    numeric_features = [f for f in feature_cols if f in X.select_dtypes(include=['int64','float64']).columns]
+
+    st.write("### Adjust Student Attributes")
     user_input = {}
-    col1, col2 = st.columns(2)
 
-    for i, feature in enumerate(feature_cols):
-        with (col1 if i % 2 == 0 else col2):
-            val = st.number_input(
-                label=f"{feature.replace('_', ' ').title()}",
-                min_value=float(df[feature].min()),
-                max_value=float(df[feature].max()),
-                value=float(df[feature].median())
-            )
-            user_input[feature] = val
+    for feature in numeric_features:
+        min_val = float(X[feature].min())
+        max_val = float(X[feature].max())
+        median_val = float(X[feature].median())
+        user_input[feature] = st.slider(
+            label=feature,
+            min_value=min_val,
+            max_value=max_val,
+            value=median_val
+        )
 
-    input_df = pd.DataFrame([user_input])
+    # Predict button
+    if st.button("Predict Placement"):
+        # Create a row with all features
+        row = pd.DataFrame(columns=feature_cols)
+        row.loc[0] = 0  # default all missing features to 0
 
-    # Scale and predict
-    scaled_input = scaler.transform(input_df)
-    prediction = model.predict(scaled_input)[0]
-    proba = model.predict_proba(scaled_input)[0][1] if hasattr(model, "predict_proba") else None
+        # Fill user input
+        for k, v in user_input.items():
+            if k in row.columns:
+                row.at[0, k] = v
 
-    st.subheader("Prediction Result:")
-    if prediction == 1:
-        st.success(f"✅ Likely to get placed! (Confidence: {round(proba*100,2)}%)")
-    else:
-        st.error(f"❌ Less likely to get placed. (Confidence: {round((1-proba)*100,2)}%)")
+        # Scale if scaler exists
+        if scaler:
+            row_scaled = scaler.transform(row)
+        else:
+            row_scaled = row.values
+
+        # Prediction
+        prob = model.predict_proba(row_scaled)[:,1][0]  # probability of placement
+        pred_label = int(model.predict(row_scaled)[0])
+
+        # Display results
+        st.success(f"Predicted Placement Probability: {prob*100:.2f}%")
+        st.info(f"Predicted Placement Status: {'Placed' if pred_label==1 else 'Not Placed'}")
