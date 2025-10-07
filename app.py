@@ -125,14 +125,6 @@ elif page == "EDA":
     fig2 = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu_r', title="Feature Correlations")
     st.plotly_chart(fig2, use_container_width=True)
 
-    st.write("### Internships vs Projects")
-    if 'internships' in df.columns and 'projects' in df.columns:
-        fig_scatter = px.scatter(df, x='internships', y='projects', color='placement_numeric',
-                                 color_discrete_map={1:'green',0:'red'},
-                                 labels={'placement_numeric':'Placement'},
-                                 title='Internships vs Projects by Placement')
-    st.plotly_chart(fig_scatter, use_container_width=True)
-
     # Interactive scatter: CGPA vs Aptitude Score
     st.write("### CGPA vs Aptitude Test Score by Placement")
     fig3 = px.scatter(df, x='cgpa', y='aptitudetestscore', color='placementstatus', 
@@ -162,69 +154,71 @@ elif page == "Model Comparison":
 # ===============================
 # 4️⃣ PREDICT PAGE
 # ===============================
-if page == "Predict":
-    st.subheader("Predict Student Placement")
-    st.write(
-        "Adjust the student attributes below and click **Predict** to see the placement probability and predicted status."
-    )
 
+@st.cache_data
+def load_artifacts():
+    model = joblib.load("outputs/placement_prediction_model.pkl")
+    scaler = joblib.load("outputs/scaler.pkl")
+    feature_cols = joblib.load("outputs/feature_columns.pkl")  # list of features
+    df = pd.read_csv("outputs/placement_cleaned.csv")           # for default values
+    return model, scaler, feature_cols, df
 
-    # Load model, scaler, and feature columns
-    @st.cache_data
-    def load_artifacts():
-        model = joblib.load("outputs/placement_prediction_model.pkl")
-        feature_cols = joblib.load("outputs/feature_columns.pkl")
-        try:
-            scaler = joblib.load("outputs/scaler.pkl")
-        except:
-            scaler = None
-        return model, feature_cols, scaler
+model, scaler, feature_cols, df = load_artifacts()
 
-    model, feature_cols, scaler = load_artifacts()
+# ----------------------------
+# Predict Function
+# ----------------------------
+def predict_student(input_dict):
+    """
+    input_dict: dict of feature_name -> value
+    returns: probability and predicted label
+    """
+    # Create a row with all feature columns in correct order
+    row = pd.DataFrame(columns=feature_cols)
+    row.loc[0] = 0  # initialize zeros
 
-    # Load cleaned dataset to extract min/max/median for numeric features
-    df_cleaned = pd.read_csv("outputs/placement_cleaned.csv")
+    for k, v in input_dict.items():
+        if k in feature_cols:
+            row.at[0, k] = v
 
-    # Determine numeric features present in both cleaned dataset and model features
-    numeric_features = [f for f in feature_cols if f in df_cleaned.select_dtypes(include=[np.number]).columns]
+    # Scale numeric features
+    numeric_cols = scaler.feature_names_in_ if hasattr(scaler, "feature_names_in_") else feature_cols
+    row_scaled = row.copy()
+    row_scaled[numeric_cols] = scaler.transform(row[numeric_cols])
 
-    st.write("### Adjust Student Attributes")
-    user_input = {}
+    # Predict
+    prob = model.predict_proba(row_scaled)[:,1][0]
+    label = int(model.predict(row_scaled)[0])
+    return {"probability": float(prob), "predicted_label": label}
 
-    # Create sliders dynamically
-    for feature in numeric_features:
-        min_val = float(df_cleaned[feature].min())
-        max_val = float(df_cleaned[feature].max())
-        median_val = float(df_cleaned[feature].median())
-        user_input[feature] = st.slider(
-            label=feature,
-            min_value=min_val,
-            max_value=max_val,
-            value=median_val
-        )
+# ----------------------------
+# Streamlit Predict Page
+# ----------------------------
+st.header("Predict Student Placement")
+st.markdown(
+    """
+    Enter the student details below. The model will predict if the student is likely to be placed.
+    """
+)
 
-    # Predict button
-    if st.button("Predict Placement"):
-        # Create a row with all features in the correct order
-        row = pd.DataFrame(columns=feature_cols)
-        row.loc[0] = 0  # default all missing features to 0
+# Prepare default values from median (numeric) or 0 (categorical)
+defaults = {}
+for col in feature_cols:
+    if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+        defaults[col] = float(df[col].median())
+    else:
+        defaults[col] = 0
 
-        # Fill user input
-        for k, v in user_input.items():
-            if k in row.columns:
-                row.at[0, k] = v
+# User input
+user_input = {}
+st.subheader("Student Details")
+with st.form("placement_form"):
+    for col in feature_cols:
+        user_input[col] = st.number_input(col, value=defaults[col])
+    submit_btn = st.form_submit_button("Predict Placement")
 
-        # Apply scaler if exists
-        if scaler:
-            row_scaled = scaler.transform(row)
-        else:
-            row_scaled = row.values
-
-        # Prediction
-        prob = model.predict_proba(row_scaled)[:,1][0]  # probability of placement
-        pred_label = int(model.predict(row_scaled)[0])
-
-        # Display results
-        st.success(f"Predicted Placement Probability: {prob*100:.2f}%")
-        st.info(f"Predicted Placement Status: {'Placed' if pred_label==1 else 'Not Placed'}")
-
+# Predict
+if submit_btn:
+    result = predict_student(user_input)
+    st.success(f"Predicted Placement: {'Placed' if result['predicted_label']==1 else 'Not Placed'}")
+    st.info(f"Probability of being placed: {result['probability']*100:.2f}%")
