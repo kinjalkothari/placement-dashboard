@@ -223,29 +223,10 @@ elif page == "Predict Placement":
 # Explainability page
 # -------------------------
     
-if page == "Explainability":
-    st.title("🧠 Model Explainability (SHAP)")
-    st.write("This section helps you understand which factors influence placement predictions most.")
-
-    try:
-        # Sample a few data points
-        X_sample = df[feature_cols].sample(50, random_state=42)
-        X_scaled = scaler.transform(X_sample)
-
-        # Initialize SHAP explainer
-        explainer = shap.Explainer(model, X_scaled)
-        shap_values = explainer(X_scaled)
-
-        # Summary Plot
-        st.subheader("Feature Importance (SHAP Summary)")
-        fig, ax = plt.subplots()
-        shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False)
-        st.pyplot(fig)
-
-        st.write("**Interpretation:** Higher SHAP value → greater influence on placement prediction.")
-    except Exception as e:
-        st.error("⚠️ Explainability failed to load. Please ensure SHAP supports your model type.")
-        st.exception(e)elif page == "Model Explainability":
+# ================================
+# 3️⃣ MODEL EXPLAINABILITY PAGE
+# ================================
+elif page == "Explainability":
     st.title("🧠 Model Explainability (SHAP)")
     st.write("This section helps you understand which factors influence placement predictions most.")
 
