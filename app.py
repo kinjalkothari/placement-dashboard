@@ -4,6 +4,17 @@ import numpy as np
 import joblib
 import plotly.express as px
 import matplotlib.pyplot as plt
+import os
+BASE_DIR = os.path.dirname(__file__)  # path to app.py
+model_path = os.path.join(BASE_DIR, "outputs/placement_prediction_model.pkl")
+scaler_path = os.path.join(BASE_DIR, "outputs/scaler.pkl")
+features_path = os.path.join(BASE_DIR, "outputs/feature_columns.pkl")
+csv_path = os.path.join(BASE_DIR, "outputs/placement_cleaned.csv")
+
+model = joblib.load(model_path)
+scaler = joblib.load(scaler_path)
+feature_cols = joblib.load(features_path)
+df = pd.read_csv(csv_path)
 
 # ===============================
 # PAGE CONFIG
