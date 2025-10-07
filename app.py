@@ -72,7 +72,7 @@ if page == "Home":
     )
     st.image(
         "https://images.unsplash.com/photo-1569248326187-3f2e136f31b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29sbGVnZXxlbnwwfHwwfHw%3D&ixlib=rb-4.0.3&q=80&w=1080", 
-        use_column_width=True
+        use_container_width=True
     )
 
 # ===============================
