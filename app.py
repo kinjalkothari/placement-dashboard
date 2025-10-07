@@ -1,20 +1,10 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import plotly.express as px
-import matplotlib.pyplot as plt
 import os
-BASE_DIR = os.path.dirname(__file__)  # path to app.py
-model_path = os.path.join(BASE_DIR, "outputs/placement_prediction_model.pkl")
-scaler_path = os.path.join(BASE_DIR, "outputs/scaler.pkl")
-features_path = os.path.join(BASE_DIR, "outputs/feature_columns.pkl")
-csv_path = os.path.join(BASE_DIR, "outputs/placement_cleaned.csv")
-
-model = joblib.load(model_path)
-scaler = joblib.load(scaler_path)
-feature_cols = joblib.load(features_path)
-df = pd.read_csv(csv_path)
 
 # ===============================
 # PAGE CONFIG
@@ -26,14 +16,28 @@ st.set_page_config(
 )
 
 # ===============================
-# LOAD ARTIFACTS
+# UTILITY: Load Artifacts Safely
 # ===============================
 @st.cache_resource
 def load_artifacts():
-    model = joblib.load("outputs/placement_prediction_model.pkl")
-    scaler = joblib.load("outputs/scaler.pkl")
-    feature_cols = joblib.load("outputs/feature_columns.pkl")
-    df = pd.read_csv("outputs/placement_cleaned.csv")
+    BASE_DIR = os.path.dirname(__file__)
+    
+    model_path = os.path.join(BASE_DIR, "outputs/placement_prediction_model.pkl")
+    scaler_path = os.path.join(BASE_DIR, "outputs/scaler.pkl")
+    features_path = os.path.join(BASE_DIR, "outputs/feature_columns.pkl")
+    csv_path = os.path.join(BASE_DIR, "outputs/placement_cleaned.csv")
+    
+    # Check all files exist
+    for f in [model_path, scaler_path, features_path, csv_path]:
+        if not os.path.exists(f):
+            st.error(f"⚠️ Missing file: {f}")
+            st.stop()
+    
+    model = joblib.load(model_path)
+    scaler = joblib.load(scaler_path)
+    feature_cols = joblib.load(features_path)
+    df = pd.read_csv(csv_path)
+    
     return model, scaler, feature_cols, df
 
 model, scaler, feature_cols, df = load_artifacts()
@@ -47,7 +51,10 @@ page = st.sidebar.radio("Go to", ["Home", "EDA", "Model Comparison", "Predict"])
 # ===============================
 # HEADER
 # ===============================
-st.markdown("<h1 style='text-align: center; color: #2E86C1;'>MIT College Placement Dashboard</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<h1 style='text-align: center; color: #2E86C1;'>MIT College Placement Dashboard</h1>", 
+    unsafe_allow_html=True
+)
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ===============================
@@ -55,8 +62,14 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # ===============================
 if page == "Home":
     st.subheader("Welcome!")
-    st.write("This dashboard helps visualize placement data and predict student placement based on attributes.")
-    st.image("https://images.unsplash.com/photo-1569248326187-3f2e136f31b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29sbGVnZXxlbnwwfHwwfHw%3D&ixlib=rb-4.0.3&q=80&w=1080", use_column_width=True)
+    st.write(
+        "This dashboard allows you to explore placement data, compare models, "
+        "and predict the chances of a student getting placed."
+    )
+    st.image(
+        "https://images.unsplash.com/photo-1569248326187-3f2e136f31b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29sbGVnZXxlbnwwfHwwfHw%3D&ixlib=rb-4.0.3&q=80&w=1080", 
+        use_column_width=True
+    )
 
 # ===============================
 # 2️⃣ EDA PAGE
@@ -64,26 +77,35 @@ if page == "Home":
 elif page == "EDA":
     st.subheader("📊 Exploratory Data Analysis")
 
-    col1, col2 = st.columns(2)
+    # Dataset preview
+    st.write("### Dataset Preview")
+    st.dataframe(df.head())
 
-    with col1:
-        st.write("Dataset Preview")
-        st.dataframe(df.head())
+    # Placement Distribution
+    st.write("### Placement Distribution")
+    fig1 = px.pie(df, names='placementstatus', title='Placed vs Not Placed', color='placementstatus')
+    st.plotly_chart(fig1, use_container_width=True)
 
-    with col2:
-        st.write("Placement Distribution")
-        fig1 = px.pie(df, names='placementstatus', title='Placed vs Not Placed', color='placementstatus')
-        st.plotly_chart(fig1, use_container_width=True)
-
-    st.write("**Correlation Heatmap**")
+    # Numeric correlation heatmap
+    st.write("### Correlation Heatmap")
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()
     corr = df[numeric_cols].corr()
     fig2 = px.imshow(corr, text_auto=True, color_continuous_scale='RdBu_r', title="Feature Correlations")
     st.plotly_chart(fig2, use_container_width=True)
 
-    st.write("**CGPA vs Aptitude Test Score by Placement**")
-    fig3 = px.scatter(df, x='cgpa', y='aptitudetestscore', color='placementstatus', title="CGPA vs Aptitude Test Score")
+    # Interactive scatter: CGPA vs Aptitude Score
+    st.write("### CGPA vs Aptitude Test Score by Placement")
+    fig3 = px.scatter(df, x='cgpa', y='aptitudetestscore', color='placementstatus', 
+                      hover_data=df.columns, title="CGPA vs Aptitude Test Score")
     st.plotly_chart(fig3, use_container_width=True)
+
+    # Interactive bar charts for categorical / ordinal features
+    st.write("### Placement % by Categorical Features")
+    cat_features = ['internships', 'projects', 'workshopscertifications', 'placementtraining', 'softskillsrating']
+    for c in cat_features:
+        ct = pd.crosstab(df[c], df['placementstatus'], normalize='index') * 100
+        fig = px.bar(ct, barmode='stack', title=f"Placement % by {c}")
+        st.plotly_chart(fig, use_container_width=True)
 
 # ===============================
 # 3️⃣ MODEL COMPARISON PAGE
@@ -93,16 +115,16 @@ elif page == "Model Comparison":
     try:
         results_df = pd.read_csv("outputs/model_comparison.csv")
         st.dataframe(results_df)
-        st.write("✅ This shows accuracy, F1-score, and ROC-AUC for different models tested.")
+        st.write("✅ Shows accuracy, F1-score, and ROC-AUC for different models.")
     except:
-        st.write("No model comparison file found.")
+        st.write("No model comparison file found. Run model evaluation first.")
 
 # ===============================
 # 4️⃣ PREDICT PAGE
 # ===============================
 elif page == "Predict":
     st.subheader("🎯 Predict Student Placement")
-    st.write("Enter student details to predict placement chances:")
+    st.write("Enter student details below to predict placement:")
 
     user_input = {}
     col1, col2 = st.columns(2)
