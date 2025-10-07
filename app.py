@@ -191,145 +191,80 @@ if page == "Model Comparison":
 # -------------------------
 # Predict page
 # -------------------------
-if page == "Predict":
-    st.header("Predict Placement Probability for a Student")
-    if model is None or scaler is None or feature_cols is None:
-        st.error("Model scaler or feature list not found in outputs/. Make sure you ran the notebook snippet to save artifacts.")
+elif page == "Predict Placement":
+    st.title("🎯 Predict Student Placement")
+    st.write("Enter student details to predict placement chances:")
+
+    user_input = {}
+    col1, col2 = st.columns(2)
+
+    # Create interactive input boxes dynamically
+    for i, feature in enumerate(feature_cols):
+        with (col1 if i % 2 == 0 else col2):
+            val = st.number_input(f"{feature}", float(df[feature].min()), float(df[feature].max()), float(df[feature].mean()))
+            user_input[feature] = val
+
+    # Convert to DataFrame
+    input_df = pd.DataFrame([user_input])
+
+    # Preprocess & Predict
+    scaled_input = scaler.transform(input_df)
+    prediction = model.predict(scaled_input)[0]
+    proba = model.predict_proba(scaled_input)[0][1] if hasattr(model, "predict_proba") else None
+
+    # Output Results
+    st.subheader("Prediction Result:")
+    if prediction == 1:
+        st.success(f"✅ The student is **likely to get placed!** (Confidence: {round(proba*100,2)}%)")
     else:
-        # Determine ranges from cleaned df if available
-        if cleaned_df is not None:
-            ranges = cleaned_df[feature_cols].describe().to_dict()
-        else:
-            ranges = {}
-        # Input form
-        with st.form("predict_form"):
-            st.subheader("Student inputs")
-            inputs = {}
-            # We'll ask base inputs (not derived) and compute derived ones automatically
-            # Base numerical inputs (use reasonable ranges if present in cleaned_df)
-            def num_input(key, label, default=None, min_val=None, max_val=None, step=0.1):
-                if default is None:
-                    default = float((min_val + max_val)/2) if (min_val is not None and max_val is not None) else 0.0
-                return st.number_input(label, value=float(default), min_value=float(min_val) if min_val is not None else None, max_value=float(max_val) if max_val is not None else None, step=step)
-
-            # create inputs for the base raw features used earlier
-            base_features = ['cgpa','internships','projects','workshopscertifications','aptitudetestscore','softskillsrating','extracurricularactivities','placementtraining','ssc_marks','hsc_marks']
-            for f in base_features:
-                if f in ranges:
-                    r = ranges[f]
-                    default = r['50%'] if '50%' in r else (r['mean'] if 'mean' in r else 0)
-                    minv = r['min'] if 'min' in r else None
-                    maxv = r['max'] if 'max' in r else None
-                else:
-                    default, minv, maxv = 0.0, None, None
-                inputs[f] = num_input(f, f.replace('_',' ').title(), default=default, min_val=minv, max_val=maxv, step=0.1)
-
-            submitted = st.form_submit_button("Predict")
-
-        if submitted:
-            # compute derived features the same way you used in notebook
-            overall_score = inputs['cgpa']*0.4 + inputs['aptitudetestscore']*0.3 + inputs['softskillsrating']*0.3
-            academic_average = (inputs['ssc_marks'] + inputs['hsc_marks']) / 2.0
-            experience_index = inputs['internships'] + inputs['projects'] + inputs['workshopscertifications']
-
-            # build the feature vector in correct order
-            x_dict = {
-                'cgpa': inputs['cgpa'],
-                'internships': inputs['internships'],
-                'projects': inputs['projects'],
-                'workshopscertifications': inputs['workshopscertifications'],
-                'aptitudetestscore': inputs['aptitudetestscore'],
-                'softskillsrating': inputs['softskillsrating'],
-                'extracurricularactivities': inputs['extracurricularactivities'],
-                'placementtraining': inputs['placementtraining'],
-                'ssc_marks': inputs['ssc_marks'],
-                'hsc_marks': inputs['hsc_marks'],
-                'overall_score': overall_score,
-                'academic_average': academic_average,
-                'experience_index': experience_index
-            }
-            # create df row and scale
-            x_row = pd.DataFrame([x_dict])[feature_cols]
-            x_scaled = scaler.transform(x_row)
-            prob = model.predict_proba(x_scaled)[0,1]
-            pred = model.predict(x_scaled)[0]
-
-            st.metric("Placement probability", f"{prob*100:.2f}%")
-            st.write("Predicted label:", "Placed" if pred==1 else "Not Placed")
-            st.progress(int(prob*100))
-
-            # show local contribution (simple: show feature values and importance if model supports)
-            st.subheader("Input values & contribution (rough)")
-            contrib_df = pd.DataFrame({'Feature': list(x_row.columns), 'Value': x_row.iloc[0].values})
-            st.dataframe(contrib_df.set_index('Feature'))
+        st.error(f"❌ The student is **less likely to get placed.** (Confidence: {round(proba*100,2)}%)")
 
 # -------------------------
 # Explainability page
 # -------------------------
-if page == "Explainability":
-    st.header("Explainability & Feature Importance")
-    if cleaned_df is None:
-        st.error("Cleaned dataset not found; cannot compute SHAP or plots.")
-    else:
-        # show feature importance from RandomForest if available
-        # try to find a RandomForest model in outputs
-        rf_candidates = [n for n in art['all_models'].keys() if 'random' in n.lower() or 'forest' in n.lower()]
-        if rf_candidates:
-            rf_name = rf_candidates[0]
-            rf = art['all_models'][rf_name]
-            try:
-                # if it has feature_importances_
-                fi = getattr(rf, "feature_importances_", None)
-                if fi is not None and feature_cols:
-                    fi_df = pd.DataFrame({'Feature': feature_cols, 'Importance': fi}).sort_values('Importance', ascending=False)
-                    st.subheader(f"Feature importance (from {rf_name})")
-                    st.plotly_chart(px.bar(fi_df, x='Importance', y='Feature', orientation='h'), use_container_width=True)
-                    st.dataframe(fi_df)
-                else:
-                    st.info("RandomForest found but does not expose feature_importances_ or feature columns missing.")
-            except Exception as e:
-                st.error(f"Error showing RF importance: {e}")
-        else:
-            st.info("No RandomForest model detected in outputs/ — feature importance via RF is unavailable.")
+    
+elif page == "Explainability":
+    st.title("🧠 Model Explainability (SHAP)")
+    st.write("This section helps you understand which factors influence placement predictions most.")
 
-        # SHAP (if available)
-        if SHAP_AVAILABLE and model is not None and cleaned_df is not None:
-            st.subheader("SHAP explanation (single instance)")
-            st.write("Select an index from the dataset to explain model prediction using SHAP (if model type supported).")
-            idx = st.number_input("Row index to explain (0 .. n-1)", min_value=0, max_value=len(cleaned_df)-1, value=0)
-            try:
-                expl_df = cleaned_df[feature_cols]
-                expl_row = expl_df.iloc[[idx]]
-                # If model is tree-based, use TreeExplainer
-                if hasattr(model, "predict_proba") and (SHAP_AVAILABLE):
-                    if 'Tree' in str(type(model)) or hasattr(model, "feature_importances_"):
-                        explainer = shap.TreeExplainer(model)
-                    else:
-                        explainer = shap.Explainer(model, expl_df)
-                    shap_values = explainer(expl_row)
-                    st.subheader("SHAP values (bar)")
-                    st.pyplot(shap.plots.bar(shap_values, max_display=10, show=False))
-                else:
-                    st.info("Model not compatible with SHAP explainer or shap not installed correctly.")
-            except Exception as e:
-                st.error("SHAP explanation failed: " + str(e))
-        else:
-            if not SHAP_AVAILABLE:
-                st.info("Install shap (`pip install shap`) for advanced local explanations.")
+    try:
+        # Sample a few data points
+        X_sample = df[feature_cols].sample(50, random_state=42)
+        X_scaled = scaler.transform(X_sample)
 
-# -------------------------
-# Download page
-# -------------------------
-if page == "Download":
-    st.header("Download artifacts & report")
-    st.write("Download saved model and prepared datasets (if present in outputs/).")
-    base = "outputs"
-    for f in os.listdir(base) if os.path.exists(base) else []:
-        st.markdown(f"- `{f}`")
-    st.info("To deploy this app online, push this repository (including outputs/) to GitHub and connect to Streamlit Cloud (instructions below).")
+        # Initialize SHAP explainer
+        explainer = shap.Explainer(model, X_scaled)
+        shap_values = explainer(X_scaled)
 
-# -------------------------
-# Footer
-# -------------------------
-st.markdown("---")
-st.write("Built with ❤️ by you — ready to present as your DVP mini project.")
+        # Summary Plot
+        st.subheader("Feature Importance (SHAP Summary)")
+        fig, ax = plt.subplots()
+        shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False)
+        st.pyplot(fig)
+
+        st.write("**Interpretation:** Higher SHAP value → greater influence on placement prediction.")
+    except Exception as e:
+        st.error("⚠️ Explainability failed to load. Please ensure SHAP supports your model type.")
+        st.exception(e)elif page == "Model Explainability":
+    st.title("🧠 Model Explainability (SHAP)")
+    st.write("This section helps you understand which factors influence placement predictions most.")
+
+    try:
+        # Sample a few data points
+        X_sample = df[feature_cols].sample(50, random_state=42)
+        X_scaled = scaler.transform(X_sample)
+
+        # Initialize SHAP explainer
+        explainer = shap.Explainer(model, X_scaled)
+        shap_values = explainer(X_scaled)
+
+        # Summary Plot
+        st.subheader("Feature Importance (SHAP Summary)")
+        fig, ax = plt.subplots()
+        shap.summary_plot(shap_values, X_sample, plot_type="bar", show=False)
+        st.pyplot(fig)
+
+        st.write("**Interpretation:** Higher SHAP value → greater influence on placement prediction.")
+    except Exception as e:
+        st.error("⚠️ Explainability failed to load. Please ensure SHAP supports your model type.")
+        st.exception(e)
