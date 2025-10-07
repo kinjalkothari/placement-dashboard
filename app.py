@@ -223,7 +223,7 @@ elif page == "Predict Placement":
 # Explainability page
 # -------------------------
     
-elif page == "Explainability":
+if page == "Explainability":
     st.title("🧠 Model Explainability (SHAP)")
     st.write("This section helps you understand which factors influence placement predictions most.")
 
