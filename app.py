@@ -92,7 +92,7 @@ if page == "Home":
     pie_data = df['placement_numeric'].value_counts().rename(index={1:'Placed', 0:'Not Placed'}).reset_index()
     pie_data.columns = ['Placement', 'Count']
     fig_pie = px.pie(pie_data, names='Placement', values='Count', color='Placement',
-                     color_discrete_map={'Placed':'green','Not Placed':'red'},
+                     color_discrete_map={'Placed':'yellow','Not Placed':'red'},
                      title="Overall Placement Distribution")
     st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -150,56 +150,3 @@ elif page == "Model Comparison":
         st.write("✅ Shows accuracy, F1-score, and ROC-AUC for different models.")
     except:
         st.write("No model comparison file found. Run model evaluation first.")
-
-# ===============================
-# 4️⃣ PREDICT PAGE
-# ===============================
-
-@st.cache_data
-def load_artifacts():
-    model = joblib.load("outputs/placement_prediction_model.pkl")
-    scaler = joblib.load("outputs/scaler.pkl")
-    feature_cols = joblib.load("outputs/feature_columns.pkl")  # list of features
-    df = pd.read_csv("outputs/placement_cleaned.csv")           # for default values
-    return model, scaler, feature_cols, df
-
-model, scaler, feature_cols, df = load_artifacts()
-
-# ----------------------------
-# Predict Function
-# ----------------------------
-
-
-
-
-# ----------------------------
-# Streamlit Predict Page
-# ----------------------------
-st.header("Predict Student Placement")
-st.markdown(
-    """
-    Enter the student details below. The model will predict if the student is likely to be placed.
-    """
-)
-
-# Prepare default values from median (numeric) or 0 (categorical)
-defaults = {}
-for col in feature_cols:
-    if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-        defaults[col] = float(df[col].median())
-    else:
-        defaults[col] = 0
-
-# User input
-user_input = {}
-st.subheader("Student Details")
-with st.form("placement_form"):
-    for col in feature_cols:
-        user_input[col] = st.number_input(col, value=defaults[col])
-    submit_btn = st.form_submit_button("Predict Placement")
-
-# Predict
-if submit_btn:
-    result = predict_student(user_input)
-    st.success(f"Predicted Placement: {'Placed' if result['predicted_label']==1 else 'Not Placed'}")
-    st.info(f"Probability of being placed: {result['probability']*100:.2f}%")
