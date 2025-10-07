@@ -65,15 +65,54 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # 1️⃣ HOME PAGE
 # ===============================
 if page == "Home":
-    st.subheader("Welcome!")
-    st.write(
-        "This dashboard allows you to explore placement data, compare models, "
-        "and predict the chances of a student getting placed."
-    )
+    st.subheader("Welcome to MIT College Placement Dashboard")
+    
+    # Hero Image
     st.image(
-        "https://images.unsplash.com/photo-1569248326187-3f2e136f31b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29sbGVnZXxlbnwwfHwwfHw%3D&ixlib=rb-4.0.3&q=80&w=1080", 
+        "https://images.unsplash.com/photo-1596496053374-3f04f0d0d9d0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29sbGVnZXxlbnwwfHwwfHw%3D&ixlib=rb-4.0.3&q=80&w=1080",
         use_container_width=True
     )
+
+    st.write(
+        """
+        This interactive dashboard allows you to:
+        - Explore placement data of MIT College students
+        - Visualize trends and correlations
+        - Compare machine learning models predicting placement
+        - Predict the likelihood of a student getting placed based on their attributes
+        """
+    )
+
+    st.markdown("---")
+
+    # Key statistics
+    total_students = df.shape[0]
+    placed_count = df[df['placementstatus']=='Placed'].shape[0]
+    not_placed_count = df[df['placementstatus']=='Not Placed'].shape[0]
+    avg_cgpa = round(df['cgpa'].mean(), 2)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Students", total_students)
+    col2.metric("Placed Students", placed_count)
+    col3.metric("Not Placed Students", not_placed_count)
+    col4.metric("Average CGPA", avg_cgpa)
+
+    st.markdown("---")
+
+    # Quick filter options for visual exploration
+    st.write("### Quick Filters")
+    col1, col2 = st.columns(2)
+    with col1:
+        internship_filter = st.slider("Internships Completed", int(df['internships'].min()), int(df['internships'].max()), (int(df['internships'].min()), int(df['internships'].max())))
+    with col2:
+        project_filter = st.slider("Projects Completed", int(df['projects'].min()), int(df['projects'].max()), (int(df['projects'].min()), int(df['projects'].max())))
+
+    filtered_df = df[(df['internships'] >= internship_filter[0]) & (df['internships'] <= internship_filter[1]) &
+                     (df['projects'] >= project_filter[0]) & (df['projects'] <= project_filter[1])]
+
+    st.write(f"Filtered Dataset Preview ({filtered_df.shape[0]} students)")
+    st.dataframe(filtered_df.head())
+
 
 # ===============================
 # 2️⃣ EDA PAGE
