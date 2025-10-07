@@ -181,15 +181,20 @@ def predict_student(input_dict):
         if k in feature_cols:
             row.at[0, k] = v
 
-    # Scale numeric features
-    numeric_cols = scaler.feature_names_in_ if hasattr(scaler, "feature_names_in_") else feature_cols
+    # Determine numeric columns that actually exist in row
+    numeric_cols = [f for f in scaler.feature_names_in_ if f in row.columns] \
+        if hasattr(scaler, "feature_names_in_") else [f for f in feature_cols if f in row.columns]
+
+    # Apply scaling only to those numeric columns
     row_scaled = row.copy()
-    row_scaled[numeric_cols] = scaler.transform(row[numeric_cols])
+    if numeric_cols:
+        row_scaled[numeric_cols] = scaler.transform(row[numeric_cols])
 
     # Predict
     prob = model.predict_proba(row_scaled)[:,1][0]
     label = int(model.predict(row_scaled)[0])
     return {"probability": float(prob), "predicted_label": label}
+
 
 # ----------------------------
 # Streamlit Predict Page
