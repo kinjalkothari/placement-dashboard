@@ -131,7 +131,7 @@ elif page == "EDA":
                                  color_discrete_map={1:'green',0:'red'},
                                  labels={'placement_numeric':'Placement'},
                                  title='Internships vs Projects by Placement')
-    st.plotly_chart(fig_scatter, use_container_width=True
+    st.plotly_chart(fig_scatter, use_container_width=True)
 
     # Interactive scatter: CGPA vs Aptitude Score
     st.write("### CGPA vs Aptitude Test Score by Placement")
