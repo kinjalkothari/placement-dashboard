@@ -170,30 +170,36 @@ model, scaler, feature_cols, df = load_artifacts()
 # ----------------------------
 def predict_student(input_dict):
     """
-    input_dict: dict of feature_name -> value
-    returns: probability and predicted label
+    input_dict: dict with raw feature names (like 'cgpa', 'internships', 'projects', 'extracurricularactivities', 'placementtraining')
     """
     # Create a row with all feature columns in correct order
     row = pd.DataFrame(columns=feature_cols)
-    row.loc[0] = 0  # initialize zeros
+    row.loc[0] = 0  # initialize all zeros
 
+    # Map user input to proper feature columns
     for k, v in input_dict.items():
-        if k in feature_cols:
+        if k in feature_cols:  # numeric features
             row.at[0, k] = v
+        else:
+            # For categorical features (one-hot), map Yes/No to the proper columns
+            possible_cols = [col for col in feature_cols if col.startswith(k+'_')]
+            for col in possible_cols:
+                # If user selects "Yes", set the corresponding column to 1
+                if str(v).strip().lower() in ['yes', '1', 'true']:
+                    row.at[0, col] = 1
+                else:
+                    row.at[0, col] = 0
 
-    # Determine numeric columns that actually exist in row
-    numeric_cols = [f for f in scaler.feature_names_in_ if f in row.columns] \
-        if hasattr(scaler, "feature_names_in_") else [f for f in feature_cols if f in row.columns]
-
-    # Apply scaling only to those numeric columns
-    row_scaled = row.copy()
+    # Apply scaling only to numeric columns that scaler expects
+    numeric_cols = [f for f in scaler.feature_names_in_ if f in row.columns]
     if numeric_cols:
-        row_scaled[numeric_cols] = scaler.transform(row[numeric_cols])
+        row[numeric_cols] = scaler.transform(row[numeric_cols])
 
     # Predict
-    prob = model.predict_proba(row_scaled)[:,1][0]
-    label = int(model.predict(row_scaled)[0])
+    prob = model.predict_proba(row)[:,1][0]
+    label = int(model.predict(row)[0])
     return {"probability": float(prob), "predicted_label": label}
+
 
 
 # ----------------------------
