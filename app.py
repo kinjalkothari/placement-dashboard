@@ -50,7 +50,7 @@ model, scaler, feature_cols, df = load_artifacts()
 # SIDEBAR NAVIGATION
 # ===============================
 st.sidebar.title("🚀 Navigation")
-page = st.sidebar.radio("Go to", ["Home", "EDA", "Model Comparison", "Predict"])
+page = st.sidebar.radio("Go to", ["Home", "EDA", "Model Comparison"])
 
 # ===============================
 # HEADER
